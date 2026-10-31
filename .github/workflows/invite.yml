@@ -31,6 +31,8 @@ jobs:
     timeout-minutes: 90
     env:
       LI_AT: ${{ secrets.LI_AT }}
+      LI_COOKIES: ${{ secrets.LI_COOKIES }}
+      LI_USER_AGENT: ${{ secrets.LI_USER_AGENT }}
       PROXY_PRIMARY: ${{ secrets.PROXY_PRIMARY }}
       PROXY_SECONDARY: ${{ secrets.PROXY_SECONDARY }}
       PROXY_USER: ${{ secrets.PROXY_USER }}

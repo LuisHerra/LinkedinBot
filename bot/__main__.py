@@ -101,7 +101,8 @@ def run(db, cfg, rng, now_local, wanted, dry_run):
         return 2
     except NotLoggedIn:
         runner.pause(db, 24 * 365, "cookie li_at caducada")
-        print("::error::La cookie LI_AT no es válida. Actualiza el secreto y lanza el workflow con la opción unpause.")
+        print("::error::LinkedIn ha invalidado la sesión. Vuelve a entrar en el Chrome del proxy, actualiza "
+              "LI_COOKIES (o LI_AT) y lanza el workflow con la opción unpause.")
         return 3
     finally:
         # Se marca la tanda como hecha pase lo que pase: ante un fallo no se reintenta cada hora en bucle.

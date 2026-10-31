@@ -78,12 +78,48 @@ def choose_proxy(cfg, iso_week):
     raise RuntimeError("Ningún proxy responde (PROXY_PRIMARY / PROXY_SECONDARY). No se ejecuta sin proxy.")
 
 
+# Cookies de vida muy corta que el navegador regenera solo; reutilizarlas caducadas no aporta nada.
+VOLATILE_COOKIES = {"__cf_bm", "lidc"}
+
+
+def parse_cookie_header(header):
+    """'a=1; b="x y"; c=3' (cabecera Cookie copiada de DevTools) -> lista de cookies de Playwright."""
+    cookies = []
+    for part in header.strip().strip("\"'").split(";"):
+        name, sep, value = part.strip().partition("=")
+        if not sep or not name or name in VOLATILE_COOKIES:
+            continue
+        cookies.append({
+            "name": name, "value": value, "domain": ".linkedin.com", "path": "/",
+            "secure": True, "sameSite": "None", "httpOnly": name in {"li_at", "bscookie"},
+        })
+    return cookies
+
+
+def session_cookies():
+    """LI_COOKIES (todas las cookies del perfil de Chrome) si existe; si no, solo LI_AT.
+
+    Con todas las cookies (bcookie, bscookie, JSESSIONID...) LinkedIn ve el mismo dispositivo en el
+    que iniciaste sesión; con li_at suelta parece un dispositivo nuevo y puede invalidar la sesión.
+    """
+    header = os.environ.get("LI_COOKIES", "").strip()
+    if header:
+        cookies = parse_cookie_header(header)
+        if any(c["name"] == "li_at" for c in cookies):
+            return cookies
+        print("Aviso: LI_COOKIES no contiene li_at; se ignora y se usa LI_AT")
+    # Tolera que el secreto se haya pegado como "li_at=valor;" o con espacios/comillas.
+    li_at = os.environ["LI_AT"].strip().strip("\"'").removeprefix("li_at=").rstrip(";").strip()
+    return parse_cookie_header(f"li_at={li_at}")
+
+
 @contextmanager
 def open_page(cfg, proxy_url):
     from playwright.sync_api import sync_playwright
 
-    # Tolera que el secreto se haya pegado como "li_at=valor;" o con espacios/comillas.
-    li_at = os.environ["LI_AT"].strip().strip("\"'").removeprefix("li_at=").rstrip(";").strip()
+    cookies = session_cookies()
+    user_agent = os.environ.get("LI_USER_AGENT", "").strip() or None
+    print(f"Sesión: {len(cookies)} cookies, user agent {'propio' if user_agent else 'por defecto de Chromium'}")
     with sync_playwright() as pw:
         # headless=False: en GitHub Actions se ejecuta dentro de xvfb-run, con navegador "con ventana".
         browser = pw.chromium.launch(headless=os.environ.get("HEADLESS") == "1",
@@ -92,11 +128,9 @@ def open_page(cfg, proxy_url):
             locale="es-ES",
             timezone_id=cfg["timezone"],
             viewport=VIEWPORT,
+            user_agent=user_agent,
         )
-        context.add_cookies([{
-            "name": "li_at", "value": li_at, "domain": ".linkedin.com", "path": "/",
-            "httpOnly": True, "secure": True, "sameSite": "None",
-        }])
+        context.add_cookies(cookies)
         page = context.new_page()
         try:
             yield page

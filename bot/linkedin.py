@@ -64,7 +64,7 @@ class LinkedIn:
         LinkedIn es una SPA que mantiene conexiones abiertas; esperar a 'domcontentloaded' a través
         de un proxy residencial puede no completarse nunca aunque la página ya sea usable.
         """
-        from playwright.sync_api import TimeoutError as PWTimeout
+        from playwright.sync_api import Error as PWError, TimeoutError as PWTimeout
 
         for attempt in range(1, attempts + 1):
             try:
@@ -76,6 +76,11 @@ class LinkedIn:
                     raise
                 print(f"  (reintentando carga de {url.split('?')[0]})")
                 self.page.wait_for_timeout(self.rng.randint(4000, 8000))
+            except PWError as e:
+                # Bucle feed <-> login: LinkedIn ha invalidado la sesión de la cookie.
+                if "ERR_TOO_MANY_REDIRECTS" in str(e):
+                    raise NotLoggedIn(f"bucle de redirecciones en {url}") from None
+                raise
         try:
             self.page.wait_for_selector("main", timeout=45_000)
         except PWTimeout:
