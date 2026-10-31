@@ -20,7 +20,7 @@ fi
 
 echo "==> Paquetes del sistema"
 sudo apt-get update -q
-sudo apt-get install -y -q python3-venv python3-pip xvfb x11vnc novnc websockify fonts-liberation
+sudo apt-get install -y -q git nano python3-venv python3-pip xvfb x11vnc novnc websockify fonts-liberation
 
 echo "==> Entorno de Python y Chromium"
 python3 -m venv .venv
