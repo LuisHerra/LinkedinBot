@@ -36,6 +36,16 @@ Envía invitaciones de LinkedIn a contactos de 2º grado. Prioriza a quienes tie
 4. Actions → linkedin-invites → Run workflow → `dry-run` con quota 3. Hace todo menos pulsar "Enviar". Revisa el log y, si falla, las capturas del artefacto `screenshots`.
 5. Cuando el dry-run vaya bien, prueba `force` con quota 1–2 y comprueba en LinkedIn que la invitación ha salido. A partir de ahí el cron funciona solo.
 
+## Elegir los proxies
+
+Para ver dónde está cada proxy y elegir los dos más cercanos a Madrid, mete tus proxies en `proxies.txt`, uno por línea (el archivo está en `.gitignore`), y ejecuta:
+
+```bash
+python tools/check_proxies.py proxies.txt
+```
+
+El script descarta los que salen como datacenter y recomienda un principal y una reserva del mismo país.
+
 ## Proxy: por qué `sticky` por defecto
 
 Cada cambio de IP en una sesión es una señal más para LinkedIn, sobre todo si las dos IPs están en ciudades distintas. Por eso, en modo `sticky` se usa siempre el principal y el secundario solo entra si el principal no responde. El modo `weekly` alterna de IP una vez por semana ISO. Si lo activas, que las dos IPs estén en la misma zona. Cada cambio de IP queda registrado como evento `proxy_ip_changed`.

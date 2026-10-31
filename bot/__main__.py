@@ -74,14 +74,14 @@ def run(db, cfg, rng, now_local, wanted, dry_run):
     from .browser import choose_proxy, open_page
     from .linkedin import Checkpoint, LinkedIn, NotLoggedIn
 
-    name, proxy_url, ip = choose_proxy(cfg, planner.week_key(now_local.date()))
-    print(f"Proxy: {name} (IP de salida {ip})")
-    if db.get("last_proxy_ip") not in (None, ip):
-        db.log("proxy_ip_changed", f"{db.get('last_proxy_ip')} -> {ip}")
-    db.set("last_proxy_ip", ip)
-
     day = db.get("day_plan")
     try:
+        name, proxy_url, ip = choose_proxy(cfg, planner.week_key(now_local.date()))
+        print(f"Proxy: {name} (IP de salida {ip})")
+        if db.get("last_proxy_ip") not in (None, ip):
+            db.log("proxy_ip_changed", f"{db.get('last_proxy_ip')} -> {ip}")
+        db.set("last_proxy_ip", ip)
+
         with open_page(cfg, proxy_url) as page:
             sent = runner.run_batch(LinkedIn(page, cfg, rng), db, cfg, rng, now_local, wanted, dry_run)
         print(f"Tanda terminada: {sent} enviadas")
