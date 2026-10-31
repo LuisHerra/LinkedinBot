@@ -83,7 +83,16 @@ def run(db, cfg, rng, now_local, wanted, dry_run):
         db.set("last_proxy_ip", ip)
 
         with open_page(cfg, proxy_url) as page:
-            sent = runner.run_batch(LinkedIn(page, cfg, rng), db, cfg, rng, now_local, wanted, dry_run)
+            li = LinkedIn(page, cfg, rng)
+            try:
+                sent = runner.run_batch(li, db, cfg, rng, now_local, wanted, dry_run)
+            except (Checkpoint, NotLoggedIn):
+                raise
+            except Exception:
+                # Captura de lo que mostraba LinkedIn al fallar; se sube como artefacto 'screenshots'.
+                li.screenshot("error")
+                print(f"URL al fallar: {page.url}")
+                raise
         print(f"Tanda terminada: {sent} enviadas")
         return 0
     except Checkpoint as e:

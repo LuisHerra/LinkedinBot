@@ -58,8 +58,28 @@ class LinkedIn:
             pass
         return path
 
-    def goto(self, url):
-        self.page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+    def goto(self, url, attempts=2):
+        """Navega tolerando la lentitud del proxy: basta con que llegue la respuesta y aparezca <main>.
+
+        LinkedIn es una SPA que mantiene conexiones abiertas; esperar a 'domcontentloaded' a través
+        de un proxy residencial puede no completarse nunca aunque la página ya sea usable.
+        """
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        for attempt in range(1, attempts + 1):
+            try:
+                self.page.goto(url, wait_until="commit", timeout=60_000)
+                break
+            except PWTimeout:
+                if attempt == attempts:
+                    self.screenshot("goto-timeout")
+                    raise
+                print(f"  (reintentando carga de {url.split('?')[0]})")
+                self.page.wait_for_timeout(self.rng.randint(4000, 8000))
+        try:
+            self.page.wait_for_selector("main", timeout=45_000)
+        except PWTimeout:
+            pass  # check_session decide si es login/checkpoint; si no, el siguiente paso fallará con captura
         self.page.wait_for_timeout(self.rng.randint(1500, 3500))
         self.check_session()
 
