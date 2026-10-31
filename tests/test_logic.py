@@ -93,10 +93,18 @@ def test_affinity_and_seniority():
 
 def test_pick_search_uses_segments():
     rng = random.Random(0)
-    names = {runner.pick_search(CFG, rng)[0] for _ in range(300)}
+    names = {runner.pick_search(CFG, rng)[0]["name"] for _ in range(300)}
     assert names == {s["name"] for s in CFG["targeting"]["segments"]}
     for seg in CFG["targeting"]["segments"]:
         assert seg["keywords"]
+
+
+def test_segment_min_mutuals_and_exclude():
+    alumni = next(s for s in CFG["targeting"]["segments"] if s["name"] == "alumni")
+    assert alumni["min_mutuals"] < CFG["targeting"]["min_mutuals"]
+    assert eligible({"mutuals": 1}, CFG, alumni["min_mutuals"])[0] is True
+    rng = random.Random(1)
+    assert all(runner.pick_search(CFG, rng, exclude=("alumni",))[0]["name"] != "alumni" for _ in range(100))
 
 
 # --- planner ---

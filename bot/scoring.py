@@ -6,9 +6,9 @@ def contains_any(text, terms):
     return any(term.lower() in text for term in terms or [])
 
 
-def eligible(c, cfg):
+def eligible(c, cfg, min_mutuals=None):
     t = cfg["targeting"]
-    if (c.get("mutuals") or 0) < t["min_mutuals"]:
+    if (c.get("mutuals") or 0) < (t["min_mutuals"] if min_mutuals is None else min_mutuals):
         return False, "pocos contactos en común"
     if c.get("followers") is not None and c["followers"] > t["max_followers"]:
         return False, "demasiados seguidores"

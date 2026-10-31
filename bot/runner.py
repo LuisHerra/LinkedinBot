@@ -58,19 +58,23 @@ def maintenance(li, db, cfg, now_local):
     return len(pending), new_manual
 
 
-def pick_search(cfg, rng, only=None):
+def pick_search(cfg, rng, only=None, exclude=()):
     """Elige segmento por peso (o el indicado en `only`) y una palabra clave dentro de él."""
     segments = cfg["targeting"]["segments"]
     if only:
         segments = [s for s in segments if s["name"] == only] or segments
+    segments = [s for s in segments if s["name"] not in exclude] or segments
     seg = rng.choices(segments, weights=[s.get("weight", 1) for s in segments])[0]
-    return seg["name"], rng.choice(seg["keywords"]), seg.get("geo_urns") or ()
+    return seg, rng.choice(seg["keywords"])
 
 
-def collect_candidates(li, db, cfg, rng, needed, only_segment=None):
+def collect_candidates(li, db, cfg, rng, needed, only_segment=None, exclude=()):
     t = cfg["targeting"]
     known = db.known_urls()
-    segment, keyword, geo = pick_search(cfg, rng, only_segment)
+    seg, keyword = pick_search(cfg, rng, only_segment, exclude)
+    segment, geo = seg["name"], seg.get("geo_urns") or ()
+    # Segmentos con afinidad propia (alumni, empresa) aceptan bien con menos contactos en común.
+    min_mutuals = seg.get("min_mutuals", t["min_mutuals"])
     pages = rng.randint(*t["search_pages"])
     found, raw = 0, []
     for page_num in range(1, pages + 1):
@@ -80,15 +84,15 @@ def collect_candidates(li, db, cfg, rng, needed, only_segment=None):
         li.pause()
     print(f"  '{segment}/{keyword}': {pages} pág., {found} perfiles leídos, {len(raw)} nuevos, "
           f"comunes={sorted((c['mutuals'] for c in raw), reverse=True)[:15]}")
-    raw = [c for c in raw if c["mutuals"] >= t["min_mutuals"]]
-    print(f"  con >= {t['min_mutuals']} contactos en común: {len(raw)}")
+    raw = [c for c in raw if c["mutuals"] >= min_mutuals]
+    print(f"  con >= {min_mutuals} contactos en común: {len(raw)}")
     raw.sort(key=lambda c: c["mutuals"], reverse=True)
 
     to_inspect = raw[: math.ceil(needed * t["profiles_to_inspect_per_invite"])]
     ranked = []
     for c in to_inspect:
         c.update(li.inspect_profile(c["profile_url"]))
-        ok, reason = eligible(c, cfg)
+        ok, reason = eligible(c, cfg, min_mutuals)
         if ok:
             c["score"] = score(c, cfg)
             ranked.append(c)
@@ -97,7 +101,7 @@ def collect_candidates(li, db, cfg, rng, needed, only_segment=None):
             db.record_skip(c["profile_url"], reason)
         li.pause()
     ranked.sort(key=lambda c: c["score"], reverse=True)
-    return f"{segment}/{keyword}", ranked
+    return segment, f"{segment}/{keyword}", ranked
 
 
 def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=None):
@@ -111,8 +115,16 @@ def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=N
     if allowed <= 0:
         return 0
 
-    search, ranked = collect_candidates(li, db, cfg, rng, allowed, only_segment)
+    segment, search, ranked = collect_candidates(li, db, cfg, rng, allowed, only_segment)
     print(f"Búsqueda '{search}': {len(ranked)} candidatos elegibles")
+    if len(ranked) < allowed and not only_segment:
+        # Una sola búsqueda extra con otro segmento para no desperdiciar la cuota de la tanda.
+        li.pause()
+        _, search2, more = collect_candidates(li, db, cfg, rng, allowed - len(ranked), exclude=(segment,))
+        print(f"Búsqueda extra '{search2}': {len(more)} candidatos elegibles")
+        seen = {c["profile_url"] for c in ranked}
+        ranked = sorted(ranked + [c for c in more if c["profile_url"] not in seen], key=lambda c: c["score"], reverse=True)
+        search = f"{search} + {search2}"
     sent = 0
     for c in ranked[:allowed]:
         try:

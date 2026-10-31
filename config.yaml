@@ -32,15 +32,18 @@ targeting:
   segments:
     - name: cayotv
       weight: 3               # Compañeros y entorno de tu empresa actual
+      min_mutuals: 1          # La empresa compartida ya da afinidad; no hace falta red común grande
       keywords: ["CayoTV", "Cayo TV"]
       geo_urns: []
     - name: telefonica_edtech
       weight: 2               # Bootcamp "Ellas Hablan Código" de Telefónica (profesor) y educación tecnológica
+      min_mutuals: 2
       keywords: ["Ellas Hablan Código", "Telefónica bootcamp", "Telefónica Tech", "profesora programación",
                  "mujeres en tecnología", "bootcamp programación"]
       geo_urns: ["105646813"]
     - name: alumni
       weight: 3               # Compañeros de universidad: los que más aceptan
+      min_mutuals: 1
       keywords: ["Universidad de Alcalá informática", "Université Paris-Saclay", "MIAGE", "Erasmus Paris-Saclay"]
       geo_urns: []
     - name: aws_cloud
@@ -61,7 +64,7 @@ targeting:
       geo_urns: ["105646813", "105015875"]
   search_pages: [1, 3]        # Páginas de resultados a recorrer por tanda
   profiles_to_inspect_per_invite: 2.5   # Perfiles visitados por invitación enviada (para leer seguidores)
-  min_mutuals: 3
+  min_mutuals: 3              # Por defecto; cada segmento puede bajarlo con su propio min_mutuals
   max_followers: 10000
   skip_creator_mode: true
   # Bonus si el titular contiene alguno de estos términos (tu terreno técnico).
