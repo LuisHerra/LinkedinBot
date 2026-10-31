@@ -128,6 +128,16 @@ class DB:
         row = self.conn.execute("SELECT COUNT(*) FROM invitations WHERE sent_at >= ?", (iso(since),)).fetchone()
         return row[0]
 
+    def invitations_since(self, since):
+        rows = self.conn.execute(
+            "SELECT * FROM invitations WHERE sent_at >= ? ORDER BY sent_at DESC", (iso(since),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def events_since(self, since, kinds=None):
+        rows = self.conn.execute("SELECT * FROM events WHERE ts >= ? ORDER BY ts DESC", (iso(since),)).fetchall()
+        return [dict(r) for r in rows if not kinds or r["kind"] in kinds]
+
     def stats(self):
         q = self.conn.execute
         return {

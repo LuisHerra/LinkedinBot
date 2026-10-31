@@ -71,6 +71,10 @@ sudo systemctl enable --now linkedin-bot.timer                        # activa e
 
 A partir de aquí, el temporizador lanza el bot cada hora entre las 9 y las 20 h, con un retraso aleatorio de hasta 25 minutos. El plan de 90–100 invitaciones a la semana decide en qué horas toca tanda.
 
+## Métricas para tu web (opcional)
+
+En la VM puedes activar una API JSON con el estado del bot, los envíos, las operaciones y la próxima tanda. Los pasos están en **[METRICS.md](METRICS.md)**.
+
 ## Uso diario
 
 ```bash

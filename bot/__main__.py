@@ -6,6 +6,7 @@
   python -m bot stats
   python -m bot unpause          quita la pausa (tras renovar la cookie o resolver una verificación)
   python -m bot login            abre el perfil persistente para iniciar sesión a mano una vez
+  python -m bot serve            API de métricas (ver deploy/METRICS.md)
 """
 import argparse
 import json
@@ -19,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from . import planner, runner
 from .config import DEFAULT_DB, load_config, load_dotenv
-from .db import DB
+from .db import DB, iso, utcnow
 
 
 def github_output(**kv):
@@ -32,7 +33,7 @@ def github_output(**kv):
 
 def main():
     ap = argparse.ArgumentParser(prog="bot")
-    ap.add_argument("command", choices=["due", "run", "plan", "stats", "unpause", "login"])
+    ap.add_argument("command", choices=["due", "run", "plan", "stats", "unpause", "login", "serve"])
     ap.add_argument("--dry-run", action="store_true", help="Todo menos pulsar el botón de enviar")
     ap.add_argument("--force", action="store_true", help="Ejecuta una tanda aunque no toque (respeta los topes)")
     ap.add_argument("--quota", type=int, default=5, help="Tamaño de la tanda con --force")
@@ -41,6 +42,9 @@ def main():
 
     load_dotenv()
     cfg = load_config()
+    if args.command == "serve":
+        from .server import serve
+        return serve(cfg)
     # BOT_DB permite pruebas locales sin tocar el estado que usa GitHub Actions.
     db = DB(Path(os.environ["BOT_DB"]) if os.environ.get("BOT_DB") else DEFAULT_DB)
     rng = random.SystemRandom()
@@ -66,6 +70,7 @@ def main():
             return 0
 
         due, why = runner.check_due(db, cfg, now_local, rng)
+        db.set("last_check", iso(utcnow()))
         print(f"[{now_local:%Y-%m-%d %H:%M}] cuota pendiente esta hora: {due} — {why}")
         if args.command == "due":
             github_output(due=str(due > 0 or args.force).lower())
@@ -110,6 +115,7 @@ def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):
     from .linkedin import Checkpoint, LinkedIn, NotLoggedIn
 
     day = db.get("day_plan")
+    outcome, sent, ip = "error", 0, None
     try:
         name, proxy_url, ip = choose_proxy(cfg, planner.week_key(now_local.date()))
         print(f"Proxy: {name} (IP de salida {ip})")
@@ -129,17 +135,22 @@ def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):
                 print(f"URL al fallar: {page.url}")
                 raise
         print(f"Tanda terminada: {sent} enviadas")
+        outcome = "ok"
         return 0
     except Checkpoint as e:
+        outcome = "checkpoint"
         runner.pause(db, cfg["maintenance"]["pause_hours_on_checkpoint"], f"checkpoint {e}")
         print("::error::LinkedIn pide verificación. Entra a mano desde tu navegador y resuélvela; el bot queda en pausa.")
         return 2
     except NotLoggedIn:
+        outcome = "session_expired"
         runner.pause(db, 24 * 365, "cookie li_at caducada")
         print("::error::LinkedIn ha invalidado la sesión. Vuelve a entrar en el Chrome del proxy, actualiza "
               "LI_COOKIES (o LI_AT) y lanza el workflow con la opción unpause.")
         return 3
     finally:
+        db.log("run", json.dumps({"wanted": wanted, "sent": sent, "outcome": outcome, "dry_run": dry_run,
+                                  "proxy_ip": ip, "segment": segment}))
         # Se marca la tanda como hecha pase lo que pase: ante un fallo no se reintenta cada hora en bucle.
         if day and not dry_run:
             planner.mark_due_done(db, day, now_local)

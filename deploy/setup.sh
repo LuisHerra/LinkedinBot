@@ -41,6 +41,8 @@ echo "==> Servicio y temporizador de systemd"
 sed -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__USER__#$USER#g" deploy/linkedin-bot.service \
   | sudo tee /etc/systemd/system/linkedin-bot.service >/dev/null
 sudo cp deploy/linkedin-bot.timer /etc/systemd/system/linkedin-bot.timer
+sed -e "s#__APP_DIR__#$APP_DIR#g" -e "s#__USER__#$USER#g" deploy/linkedin-bot-api.service \
+  | sudo tee /etc/systemd/system/linkedin-bot-api.service >/dev/null
 sudo systemctl daemon-reload
 
 cat <<EOF
@@ -50,4 +52,5 @@ Instalación terminada. Siguientes pasos:
   2. bash deploy/login.sh              (iniciar sesión en LinkedIn una vez, vía noVNC)
   3. xvfb-run -a .venv/bin/python -m bot run --force --quota 2 --dry-run
   4. sudo systemctl enable --now linkedin-bot.timer
+  5. (opcional) API de métricas: ver deploy/METRICS.md
 EOF
