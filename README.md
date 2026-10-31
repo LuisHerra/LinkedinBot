@@ -25,7 +25,13 @@ Envía invitaciones de LinkedIn a contactos de 2º grado. Prioriza a quienes tie
 - Si avisa del límite semanal, 72 h.
 - Si la cookie caduca, hasta que la renueves.
 
-## Puesta en marcha
+## Despliegue recomendado: VM en Google Cloud
+
+Sigue **[deploy/GCP.md](deploy/GCP.md)**: una e2-micro gratuita con un perfil de navegador persistente, en la que inicias sesión en LinkedIn una sola vez. Es la opción estable.
+
+Con GitHub Actions, LinkedIn invalidó la sesión en las pruebas. Cada ejecución arranca un navegador nuevo con cookies copiadas, y para LinkedIn eso es un dispositivo distinto cada hora. La sección siguiente se mantiene como referencia, pero el cron solo se activa con `BOT_ENABLED=true`.
+
+## Puesta en marcha (GitHub Actions, no recomendado)
 
 1. Crea un repositorio **privado**: el estado contiene nombres y perfiles.
 2. Añade estos secretos en Settings → Secrets and variables → Actions:

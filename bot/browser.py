@@ -125,13 +125,14 @@ def open_page(cfg, proxy_url):
 
     profile_dir = os.environ.get("CHROME_PROFILE_DIR", "").strip()
     if profile_dir:
-        # Modo local: tu Chrome real con el perfil donde ya iniciaste sesión (Chrome debe estar cerrado).
-        print(f"Sesión: perfil de Chrome {profile_dir}")
+        # Perfil persistente: tu Chrome en Windows o el Chromium de Playwright en la VM.
+        # La sesión vive en el propio perfil, así que nunca se copian cookies entre máquinas.
+        exe = os.environ.get("CHROME_EXE") or next((p for p in CHROME_PATHS if os.path.exists(p)), None)
+        print(f"Sesión: perfil persistente {profile_dir} ({'Chrome' if exe else 'Chromium de Playwright'})")
         with sync_playwright() as pw:
-            exe = os.environ.get("CHROME_EXE") or next((p for p in CHROME_PATHS if os.path.exists(p)), None)
             context = pw.chromium.launch_persistent_context(
                 profile_dir,
-                **({"executable_path": exe} if exe else {"channel": "chrome"}),
+                **({"executable_path": exe} if exe else {}),
                 headless=False,
                 proxy=proxy_from_url(normalize_proxy(proxy_url)),
                 locale="es-ES",

@@ -5,12 +5,14 @@
   python -m bot plan             muestra el plan de la semana y del día
   python -m bot stats
   python -m bot unpause          quita la pausa (tras renovar la cookie o resolver una verificación)
+  python -m bot login            abre el perfil persistente para iniciar sesión a mano una vez
 """
 import argparse
 import json
 import os
 import random
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -30,7 +32,7 @@ def github_output(**kv):
 
 def main():
     ap = argparse.ArgumentParser(prog="bot")
-    ap.add_argument("command", choices=["due", "run", "plan", "stats", "unpause"])
+    ap.add_argument("command", choices=["due", "run", "plan", "stats", "unpause", "login"])
     ap.add_argument("--dry-run", action="store_true", help="Todo menos pulsar el botón de enviar")
     ap.add_argument("--force", action="store_true", help="Ejecuta una tanda aunque no toque (respeta los topes)")
     ap.add_argument("--quota", type=int, default=5, help="Tamaño de la tanda con --force")
@@ -53,6 +55,9 @@ def main():
             print("Pausa eliminada")
             return 0
 
+        if args.command == "login":
+            return login(cfg, now_local)
+
         if args.command == "plan":
             planner.ensure_plans(db, cfg, now_local, rng)
             print(json.dumps({"week": db.get("week_plan"), "day": db.get("day_plan"),
@@ -71,6 +76,32 @@ def main():
         return run(db, cfg, rng, now_local, wanted, args.dry_run, args.segment)
     finally:
         db.close()
+
+
+def login(cfg, now_local, timeout_min=20):
+    """Abre LinkedIn en el perfil persistente (por el proxy) y espera a que inicies sesión a mano.
+
+    En la VM se ve a través de noVNC; la sesión queda guardada en CHROME_PROFILE_DIR y el bot la reutiliza.
+    """
+    from .browser import choose_proxy, open_page
+
+    if not os.environ.get("CHROME_PROFILE_DIR"):
+        print("Falta CHROME_PROFILE_DIR: el inicio de sesión se guarda en un perfil persistente.")
+        return 1
+    name, proxy_url, ip = choose_proxy(cfg, planner.week_key(now_local.date()))
+    print(f"Proxy: {name} (IP de salida {ip})")
+    with open_page(cfg, proxy_url) as page:
+        page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=60_000)
+        print(f"Inicia sesión en la ventana del navegador. Espero hasta {timeout_min} min a que llegues al feed...")
+        deadline = time.time() + timeout_min * 60
+        while time.time() < deadline:
+            if "/feed" in page.url and not page.locator("input[type='password']").count():
+                print("Sesión iniciada y guardada en el perfil.")
+                page.wait_for_timeout(5000)
+                return 0
+            page.wait_for_timeout(3000)
+    print("Tiempo agotado sin llegar al feed.")
+    return 1
 
 
 def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):

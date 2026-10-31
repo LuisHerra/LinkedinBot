@@ -1,0 +1,11 @@
+[Unit]
+Description=Comprueba cada hora (9-20 h, Madrid) si toca tanda de invitaciones
+
+[Timer]
+# El bot decide si esta hora toca según el plan; el retraso aleatorio evita minutos fijos.
+OnCalendar=*-*-* 09..19:05:00
+RandomizedDelaySec=25min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

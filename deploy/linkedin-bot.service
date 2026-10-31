@@ -1,0 +1,13 @@
+[Unit]
+Description=LinkedIn bot: ejecuta una tanda si el plan aleatorio lo indica
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStart=/usr/bin/xvfb-run -a __APP_DIR__/.venv/bin/python -m bot run
+TimeoutStartSec=90min
+Nice=10
