@@ -25,6 +25,8 @@ permissions:
 
 jobs:
   invite:
+    # El cron solo actúa con la variable de repositorio BOT_ENABLED=true; la ejecución manual siempre funciona.
+    if: github.event_name != 'schedule' || vars.BOT_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
