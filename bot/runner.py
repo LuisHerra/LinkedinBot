@@ -69,6 +69,8 @@ def pick_search(cfg, rng, only=None, exclude=()):
 
 
 def collect_candidates(li, db, cfg, rng, needed, only_segment=None, exclude=()):
+    from .linkedin import ProfileUnavailable
+
     t = cfg["targeting"]
     known = db.known_urls()
     seg, keyword = pick_search(cfg, rng, only_segment, exclude)
@@ -91,7 +93,12 @@ def collect_candidates(li, db, cfg, rng, needed, only_segment=None, exclude=()):
     to_inspect = raw[: math.ceil(needed * t["profiles_to_inspect_per_invite"])]
     ranked = []
     for c in to_inspect:
-        c.update(li.inspect_profile(c["profile_url"]))
+        try:
+            c.update(li.inspect_profile(c["profile_url"]))
+        except ProfileUnavailable:
+            print(f"  saltado {c['name']}: el perfil no ha cargado")
+            li.pause()
+            continue
         ok, reason = eligible(c, cfg, min_mutuals)
         if ok:
             c["score"] = score(c, cfg)
@@ -105,7 +112,7 @@ def collect_candidates(li, db, cfg, rng, needed, only_segment=None, exclude=()):
 
 
 def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=None):
-    from .linkedin import WeeklyLimitReached
+    from .linkedin import ProfileUnavailable, WeeklyLimitReached
 
     li.ensure_logged_in()
     n_pending, new_manual = maintenance(li, db, cfg, now_local)
@@ -129,6 +136,9 @@ def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=N
     for c in ranked[:allowed]:
         try:
             ok, reason = li.send_invite(c["profile_url"], dry_run=dry_run)
+        except ProfileUnavailable:
+            print(f"  saltado {c['name']}: el perfil no ha cargado")
+            continue
         except WeeklyLimitReached:
             pause(db, 72, "LinkedIn avisó del límite semanal")
             break

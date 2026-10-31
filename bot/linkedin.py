@@ -84,6 +84,10 @@ class WeeklyLimitReached(Exception):
     pass
 
 
+class ProfileUnavailable(Exception):
+    """Un perfil concreto no ha cargado; se salta sin abortar la tanda."""
+
+
 class LinkedIn:
     def __init__(self, page, cfg, rng):
         self.page = page
@@ -256,12 +260,26 @@ class LinkedIn:
         """
         return self.page.evaluate(TOP_CARD_JS) or {"connect": False, "follow": False, "pending": False, "more": False}
 
+    def profile_text(self, profile_url, attempts=2):
+        """Texto de <main> del perfil; en máquinas lentas o con proxy puede tardar, así que se recarga una vez."""
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        for attempt in range(1, attempts + 1):
+            try:
+                return self.page.locator("main").inner_text(timeout=30_000)
+            except PWTimeout:
+                if attempt == attempts:
+                    self.screenshot("profile-timeout")
+                    raise ProfileUnavailable(profile_url) from None
+                print(f"  (perfil lento, recargando {profile_url})")
+                self.goto(profile_url)
+
     def inspect_profile(self, profile_url):
         self.goto(profile_url)
         if os.environ.get("DEBUG_SHOTS"):
             self.screenshot("profile")
         self.scroll_a_bit(self.rng.randint(1, 3))
-        text = self.page.locator("main").inner_text(timeout=15_000)
+        text = self.profile_text(profile_url)
         state = self.top_card_state()
         return {
             "followers": parse_followers(text),
@@ -297,6 +315,7 @@ class LinkedIn:
         """Envía la invitación sin nota. Devuelve (ok, motivo)."""
         if self.page.url.rstrip("/") != profile_url.rstrip("/"):
             self.goto(profile_url)
+        self.profile_text(profile_url)  # asegura que la tarjeta ha cargado antes de buscar "Conectar"
         card = self.top_card()
         button = self.connect_control()
         if button is None:
