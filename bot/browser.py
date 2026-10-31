@@ -1,5 +1,6 @@
 """Arranque del navegador: proxy residencial fijo, sesión por cookie y perfil de navegador constante."""
 import os
+import sys
 import urllib.request
 from contextlib import contextmanager
 from urllib.parse import quote, unquote, urlsplit
@@ -128,14 +129,21 @@ def open_page(cfg, proxy_url):
         # Perfil persistente: tu Chrome en Windows o el Chromium de Playwright en la VM.
         # La sesión vive en el propio perfil, así que nunca se copian cookies entre máquinas.
         exe = os.environ.get("CHROME_EXE") or next((p for p in CHROME_PATHS if os.path.exists(p)), None)
-        print(f"Sesión: perfil persistente {profile_dir} ({'Chrome' if exe else 'Chromium de Playwright'})")
+        # Sin vídeos en reproducción automática y sin /dev/shm: menos CPU y RAM en la e2-micro.
+        args = ["--autoplay-policy=user-gesture-required", "--disable-dev-shm-usage"]
+        # Modo ligero (por defecto en Linux/VM): sin descargar imágenes. Es lo que más CPU y ancho de banda
+        # consume en una máquina pequeña con proxy, y el bot no las necesita.
+        light = os.environ.get("LIGHT_BROWSER", "1" if sys.platform.startswith("linux") else "0") == "1"
+        if light:
+            args.append("--blink-settings=imagesEnabled=false")
+        print(f"Sesión: perfil persistente {profile_dir} ({'Chrome' if exe else 'Chromium de Playwright'}"
+              f"{', modo ligero' if light else ''})")
         with sync_playwright() as pw:
             context = pw.chromium.launch_persistent_context(
                 profile_dir,
                 **({"executable_path": exe} if exe else {}),
                 headless=False,
-                # Sin vídeos en reproducción automática y sin /dev/shm: menos CPU y RAM en la e2-micro.
-                args=["--autoplay-policy=user-gesture-required", "--disable-dev-shm-usage"],
+                args=args,
                 proxy=proxy_from_url(normalize_proxy(proxy_url)),
                 locale="es-ES",
                 timezone_id=cfg["timezone"],

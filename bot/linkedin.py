@@ -351,14 +351,22 @@ class LinkedIn:
             # No se pulsa: en algunos perfiles "Conectar" envía directamente sin diálogo.
             self.page.keyboard.press("Escape")
             return True, f"dry-run (encontrado: {button.get_attribute('aria-label') or button.inner_text()})"
-        button.click()
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        # "Conectar" es un enlace a /preload/custom-invite/: Playwright esperaría a que esa navegación termine,
+        # y en una máquina lenta con proxy eso supera el timeout aunque el diálogo ya esté abriéndose.
+        button.click(no_wait_after=True, timeout=60_000)
+        try:
+            self.page.wait_for_selector("[role='dialog']:visible, [role='alertdialog']:visible", timeout=45_000)
+        except PWTimeout:
+            pass  # algunos perfiles envían directamente sin diálogo; se comprueba abajo
         self.page.wait_for_timeout(self.rng.randint(1200, 2500))
 
         body = self.page.locator("body").inner_text()
         if WEEKLY_LIMIT.search(body):
             self.screenshot("weekly-limit")
             raise WeeklyLimitReached()
-        dialog = self.page.get_by_role("dialog")
+        dialog = self.page.locator("[role='dialog']:visible, [role='alertdialog']:visible")
         if dialog.count():
             if EMAIL_REQUIRED.search(dialog.first.inner_text()):
                 self.page.keyboard.press("Escape")
@@ -368,14 +376,24 @@ class LinkedIn:
                 self.screenshot("dialog-unknown")
                 self.page.keyboard.press("Escape")
                 return False, "diálogo desconocido"
-            send.first.click()
+            send.first.click(no_wait_after=True, timeout=60_000)
+            try:
+                dialog.first.wait_for(state="hidden", timeout=30_000)
+            except PWTimeout:
+                pass
             self.page.wait_for_timeout(self.rng.randint(1500, 3000))
 
         body = self.page.locator("body").inner_text()
         if WEEKLY_LIMIT.search(body):
             self.screenshot("weekly-limit")
             raise WeeklyLimitReached()
+        # Si el envío dejó la página en /preload/custom-invite/, se vuelve al perfil para verificar "Pendiente".
+        if "custom-invite" in self.page.url:
+            self.goto(profile_url)
+            self.profile_text(profile_url)
         if self.top_card_state()["pending"]:
             return True, "enviada"
+        # Sin diálogo y sin "Pendiente": no se puede afirmar que se envió. No se registra como enviada;
+        # si en realidad salió, la próxima sincronización de pendientes la detectará y la contará.
         self.screenshot("unconfirmed")
-        return True, "enviada (sin confirmar estado pendiente)"
+        return False, "no confirmada (sin diálogo ni estado pendiente)"
