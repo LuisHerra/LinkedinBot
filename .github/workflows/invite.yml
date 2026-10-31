@@ -1,0 +1,88 @@
+name: linkedin-invites
+
+on:
+  schedule:
+    # Cada hora entre las 06 y las 19 UTC (cubre 9-20 h en Madrid con horario de verano e invierno).
+    # El script decide si esta hora toca tanda; GitHub además retrasa el cron unos minutos de forma variable.
+    - cron: "11 6-19 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Qué ejecutar"
+        type: choice
+        default: dry-run
+        options: [dry-run, force, unpause, plan]
+      quota:
+        description: "Tamaño de la tanda en modo force"
+        default: "3"
+
+concurrency:
+  group: linkedin-invites
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  invite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      LI_AT: ${{ secrets.LI_AT }}
+      PROXY_PRIMARY: ${{ secrets.PROXY_PRIMARY }}
+      PROXY_SECONDARY: ${{ secrets.PROXY_SECONDARY }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: ¿Toca tanda?
+        id: due
+        if: github.event_name == 'schedule'
+        run: python -m bot due
+
+      - name: Comandos sin navegador
+        if: github.event_name == 'workflow_dispatch' && (inputs.mode == 'unpause' || inputs.mode == 'plan')
+        run: python -m bot ${{ inputs.mode }}
+
+      - name: Preparar navegador
+        id: browser
+        if: steps.due.outputs.due == 'true' || inputs.mode == 'dry-run' || inputs.mode == 'force'
+        run: |
+          python -m playwright install --with-deps chromium
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Tanda programada
+        if: steps.browser.outputs.ready == 'true' && github.event_name == 'schedule'
+        run: |
+          sleep $(( RANDOM % 180 ))
+          xvfb-run --auto-servernum python -m bot run
+
+      - name: Tanda manual
+        if: steps.browser.outputs.ready == 'true' && github.event_name == 'workflow_dispatch'
+        run: >
+          xvfb-run --auto-servernum python -m bot run --force --quota ${{ inputs.quota }}
+          ${{ inputs.mode == 'dry-run' && '--dry-run' || '' }}
+
+      - name: Guardar estado
+        if: always()
+        run: |
+          git config user.name "linkedin-bot"
+          git config user.email "linkedin-bot@users.noreply.github.com"
+          git add data/state.db
+          git diff --cached --quiet || git commit -m "estado $(date -u +%FT%TZ) [skip ci]"
+          git push
+
+      - name: Capturas de error
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: data/screenshots/
+          retention-days: 7

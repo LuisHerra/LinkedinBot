@@ -1,0 +1,88 @@
+# Configuración del bot de invitaciones. Todo lo sensible (cookie, proxies) va en secretos de GitHub.
+
+timezone: Europe/Madrid
+
+limits:
+  weekly_hard_cap: 100        # Nunca se supera en una ventana móvil de 7 días (incluye las que mandes a mano)
+  weekly_target_min: 90       # Objetivo semanal aleatorio entre min y max
+  weekly_target_max: 100
+  daily_cap: 25
+  # Rampa de calentamiento: objetivo semanal máximo durante las primeras semanas de uso del bot.
+  # Pon [] si tu cuenta ya manda ~100/semana a mano.
+  warmup_weekly_targets: [50, 75]
+
+schedule:
+  window_start_hour: 9        # Hora local (inclusive)
+  window_end_hour: 20         # Hora local (exclusive)
+  batches_per_day: [2, 5]     # Número aleatorio de tandas por día con envíos
+  rest_days_per_week: [0, 2]  # Días aleatorios sin enviar nada
+  delay_between_invites_s: [45, 150]
+  delay_between_pages_s: [4, 12]
+
+proxy:
+  # sticky: siempre el principal; el secundario solo si el principal no responde.
+  # weekly: alterna principal/secundario por semana ISO (cambio de IP poco frecuente y predecible).
+  mode: sticky
+
+targeting:
+  # Segmentos de búsqueda de contactos de 2º grado. En cada tanda se elige un segmento según su peso
+  # y, dentro de él, una palabra clave al azar. Ordenados de mayor a menor tasa de aceptación esperada.
+  # geo_urns: IDs de ubicación de LinkedIn. 105646813 = España, 105015875 = Francia.
+  # Para una ciudad concreta, filtra a mano en LinkedIn y copia el número de geoUrn de la URL.
+  segments:
+    - name: cayotv
+      weight: 3               # Compañeros y entorno de tu empresa actual
+      keywords: ["CayoTV", "Cayo TV"]
+      geo_urns: []
+    - name: telefonica_edtech
+      weight: 2               # Bootcamp "Ellas Hablan Código" de Telefónica (profesor) y educación tecnológica
+      keywords: ["Ellas Hablan Código", "Telefónica bootcamp", "Telefónica Tech", "profesora programación",
+                 "mujeres en tecnología", "bootcamp programación"]
+      geo_urns: ["105646813"]
+    - name: alumni
+      weight: 3               # Compañeros de universidad: los que más aceptan
+      keywords: ["Universidad de Alcalá informática", "Université Paris-Saclay", "MIAGE", "Erasmus Paris-Saclay"]
+      geo_urns: []
+    - name: aws_cloud
+      weight: 2
+      keywords: ["AWS", "cloud engineer", "solutions architect", "AWS mentor"]
+      geo_urns: ["105646813"]
+    - name: ia_datos
+      weight: 2
+      keywords: ["data scientist", "machine learning engineer", "inteligencia artificial", "data engineer"]
+      geo_urns: ["105646813", "105015875"]
+    - name: desarrollo_web
+      weight: 2
+      keywords: ["desarrollador web", "full stack developer", "frontend developer", "node.js"]
+      geo_urns: ["105646813"]
+    - name: recruiters_tech
+      weight: 1               # Aceptan casi siempre y son útiles para prácticas o primer empleo
+      keywords: ["IT recruiter", "tech recruiter", "talent acquisition tecnología"]
+      geo_urns: ["105646813", "105015875"]
+  search_pages: [1, 3]        # Páginas de resultados a recorrer por tanda
+  profiles_to_inspect_per_invite: 2.5   # Perfiles visitados por invitación enviada (para leer seguidores)
+  min_mutuals: 3
+  max_followers: 10000
+  skip_creator_mode: true
+  # Bonus si el titular contiene alguno de estos términos (tu terreno técnico).
+  headline_boost_terms: ["data", "datos", "machine learning", "ia ", "ai ", "cloud", "aws", "developer",
+                         "desarrollador", "software", "estudiante", "student", "recruiter", "bootcamp",
+                         "formador", "profesor", "profesora", "streaming", "media"]
+  # Bonus si el perfil menciona algo que compartís (universidad, programa, comunidad).
+  affinity_terms: ["cayotv", "cayo tv", "ellas hablan código", "ellas hablan codigo", "telefónica", "telefonica",
+                   "universidad de alcalá", " uah", "paris-saclay", "miage", "erasmus", "aws mentor",
+                   "amazon web services"]
+  # Penalización: perfiles muy senior aceptan poco a estudiantes y perfiles junior.
+  senior_terms: ["director", "vp ", "vice president", "head of", "chief", "ceo", "partner", "managing"]
+
+scoring:
+  w_mutuals: 3.0              # Peso de log(1 + contactos en común)
+  w_followers: 1.5            # Penalización por log10(seguidores)
+  w_headline: 1.0             # Bonus si el titular contiene algún término de headline_boost_terms
+  w_affinity: 2.0             # Bonus si el perfil contiene algún término de affinity_terms
+  w_senior: 1.5               # Penalización si el titular contiene algún término de senior_terms
+
+maintenance:
+  withdraw_after_days: 21     # Retira invitaciones pendientes más antiguas que esto
+  max_withdrawals_per_run: 5
+  pause_hours_on_checkpoint: 48
