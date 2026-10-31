@@ -113,7 +113,7 @@ class LinkedIn:
             pass
         return path
 
-    def goto(self, url, attempts=2):
+    def goto(self, url, attempts=3):
         """Navega tolerando la lentitud del proxy: basta con que llegue la respuesta y aparezca <main>.
 
         LinkedIn es una SPA que mantiene conexiones abiertas; esperar a 'domcontentloaded' a través
@@ -135,6 +135,11 @@ class LinkedIn:
                 # Bucle feed <-> login: LinkedIn ha invalidado la sesión de la cookie.
                 if "ERR_TOO_MANY_REDIRECTS" in str(e):
                     raise NotLoggedIn(f"bucle de redirecciones en {url}") from None
+                # La página anterior aún estaba redirigiendo por su cuenta (SPA): se espera y se reintenta.
+                if "interrupted by another navigation" in str(e) and attempt < attempts:
+                    print(f"  (navegación interrumpida, reintentando {url.split('?')[0]})")
+                    self.page.wait_for_timeout(self.rng.randint(2500, 5000))
+                    continue
                 raise
         try:
             self.page.wait_for_selector("main", timeout=45_000)
@@ -275,7 +280,13 @@ class LinkedIn:
                 self.goto(profile_url)
 
     def inspect_profile(self, profile_url):
-        self.goto(profile_url)
+        from playwright.sync_api import Error as PWError
+
+        try:
+            self.goto(profile_url)
+        except PWError as e:  # timeouts y navegaciones fallidas de un perfil concreto
+            self.screenshot("profile-error")
+            raise ProfileUnavailable(f"{profile_url}: {str(e).splitlines()[0][:120]}") from None
         if os.environ.get("DEBUG_SHOTS"):
             self.screenshot("profile")
         self.scroll_a_bit(self.rng.randint(2, 4))
@@ -324,8 +335,13 @@ class LinkedIn:
 
     def send_invite(self, profile_url, dry_run=False):
         """Envía la invitación sin nota. Devuelve (ok, motivo)."""
+        from playwright.sync_api import Error as PWError
+
         if self.page.url.rstrip("/") != profile_url.rstrip("/"):
-            self.goto(profile_url)
+            try:
+                self.goto(profile_url)
+            except PWError as e:
+                raise ProfileUnavailable(f"{profile_url}: {str(e).splitlines()[0][:120]}") from None
         self.profile_text(profile_url)  # asegura que la tarjeta ha cargado antes de buscar "Conectar"
         card = self.top_card()
         button = self.connect_control()
