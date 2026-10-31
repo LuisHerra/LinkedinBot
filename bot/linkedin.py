@@ -278,8 +278,19 @@ class LinkedIn:
         self.goto(profile_url)
         if os.environ.get("DEBUG_SHOTS"):
             self.screenshot("profile")
-        self.scroll_a_bit(self.rng.randint(1, 3))
+        self.scroll_a_bit(self.rng.randint(2, 4))
         text = self.profile_text(profile_url)
+        if parse_followers(text) is None:
+            # El número de seguidores está en la sección "Actividad", que se carga al hacer scroll;
+            # en la VM tarda más, así que se espera un poco antes de darlo por desconocido.
+            try:
+                self.page.wait_for_function(
+                    "() => /seguidores|followers/i.test(document.querySelector('main')?.innerText || '')",
+                    timeout=10_000,
+                )
+                text = self.page.locator("main").inner_text(timeout=10_000)
+            except Exception:
+                pass
         state = self.top_card_state()
         return {
             "followers": parse_followers(text),

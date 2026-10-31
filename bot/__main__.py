@@ -116,6 +116,7 @@ def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):
 
     day = db.get("day_plan")
     outcome, sent, ip = "error", 0, None
+    started = time.monotonic()
     try:
         name, proxy_url, ip = choose_proxy(cfg, planner.week_key(now_local.date()))
         print(f"Proxy: {name} (IP de salida {ip})")
@@ -149,8 +150,10 @@ def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):
               "LI_COOKIES (o LI_AT) y lanza el workflow con la opción unpause.")
         return 3
     finally:
+        duration = round(time.monotonic() - started)
+        print(f"Duración de la tanda: {duration // 60} min {duration % 60} s")
         db.log("run", json.dumps({"wanted": wanted, "sent": sent, "outcome": outcome, "dry_run": dry_run,
-                                  "proxy_ip": ip, "segment": segment}))
+                                  "proxy_ip": ip, "segment": segment, "duration_s": duration}))
         # Se marca la tanda como hecha pase lo que pase: ante un fallo no se reintenta cada hora en bucle.
         if day and not dry_run:
             planner.mark_due_done(db, day, now_local)

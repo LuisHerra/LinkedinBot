@@ -134,6 +134,8 @@ def open_page(cfg, proxy_url):
                 profile_dir,
                 **({"executable_path": exe} if exe else {}),
                 headless=False,
+                # Sin vídeos en reproducción automática y sin /dev/shm: menos CPU y RAM en la e2-micro.
+                args=["--autoplay-policy=user-gesture-required", "--disable-dev-shm-usage"],
                 proxy=proxy_from_url(normalize_proxy(proxy_url)),
                 locale="es-ES",
                 timezone_id=cfg["timezone"],

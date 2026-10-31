@@ -68,7 +68,7 @@ def _operations(db, since, tz, detailed):
                 data = json.loads(e["detail"])
             except (TypeError, ValueError):
                 data = {}
-            op.update({k: data.get(k) for k in ("wanted", "sent", "outcome", "dry_run")})
+            op.update({k: data.get(k) for k in ("wanted", "sent", "outcome", "dry_run", "duration_s")})
         elif detailed:
             op["detail"] = e["detail"]
         ops.append(op)
@@ -88,7 +88,7 @@ def build(db, cfg, now_local=None, detailed=False):
     if runs:
         r = runs[0]
         data = json.loads(r["detail"]) if r["detail"] else {}
-        last_run = {"at": _local(r["ts"], tz), **{k: data.get(k) for k in ("sent", "outcome", "dry_run")}}
+        last_run = {"at": _local(r["ts"], tz), **{k: data.get(k) for k in ("sent", "outcome", "dry_run", "duration_s")}}
 
     history = {}
     for inv in db.invitations_since(utcnow() - timedelta(days=30)):
