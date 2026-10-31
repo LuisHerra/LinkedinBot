@@ -33,6 +33,8 @@ jobs:
       LI_AT: ${{ secrets.LI_AT }}
       PROXY_PRIMARY: ${{ secrets.PROXY_PRIMARY }}
       PROXY_SECONDARY: ${{ secrets.PROXY_SECONDARY }}
+      PROXY_USER: ${{ secrets.PROXY_USER }}
+      PROXY_PASS: ${{ secrets.PROXY_PASS }}
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4

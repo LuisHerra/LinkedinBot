@@ -2,7 +2,7 @@
 import os
 import urllib.request
 from contextlib import contextmanager
-from urllib.parse import urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 # Huella constante entre ejecuciones: mismo idioma, zona horaria y tamaño de ventana que un PC normal.
 VIEWPORT = {"width": 1440, "height": 900}
@@ -13,8 +13,8 @@ def proxy_from_url(url):
     p = urlsplit(url)
     proxy = {"server": f"{p.scheme}://{p.hostname}:{p.port}"}
     if p.username:
-        proxy["username"] = p.username
-        proxy["password"] = p.password or ""
+        proxy["username"] = unquote(p.username)
+        proxy["password"] = unquote(p.password or "")
     return proxy
 
 
@@ -32,6 +32,10 @@ def normalize_proxy(raw):
     if "@" not in rest and len(parts) == 4:
         host, port, user, password = parts
         rest = f"{user}:{password}@{host}:{port}"
+    # Si el secreto solo trae ip:puerto, usa las credenciales comunes de PROXY_USER / PROXY_PASS.
+    user, password = os.environ.get("PROXY_USER", "").strip(), os.environ.get("PROXY_PASS", "").strip()
+    if "@" not in rest and user:
+        rest = f"{quote(user, safe='')}:{quote(password, safe='')}@{rest}"
     return f"{scheme}://{rest}"
 
 
@@ -67,7 +71,10 @@ def choose_proxy(cfg, iso_week):
         ip, error = proxy_alive(url)
         if ip:
             return name, url, ip
-        print(f"Proxy {name} {describe(url)} falla: {error}")
+        hint = ""
+        if "407" in (error or "") and not urlsplit(url).username:
+            hint = " → el secreto solo tiene ip:puerto; añade los secretos PROXY_USER y PROXY_PASS"
+        print(f"Proxy {name} {describe(url)} falla: {error}{hint}")
     raise RuntimeError("Ningún proxy responde (PROXY_PRIMARY / PROXY_SECONDARY). No se ejecuta sin proxy.")
 
 
