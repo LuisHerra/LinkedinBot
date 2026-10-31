@@ -16,6 +16,7 @@ schedule:
   window_end_hour: 20         # Hora local (exclusive)
   batches_per_day: [2, 5]     # Número aleatorio de tandas por día con envíos
   rest_days_per_week: [0, 2]  # Días aleatorios sin enviar nada
+  max_per_batch: 5           # Tope por tanda aunque se acumulen tandas atrasadas
   delay_between_invites_s: [45, 150]
   delay_between_pages_s: [4, 12]
 

@@ -196,6 +196,16 @@ def test_sync_marks_resolved(db):
     assert db.stats()["resolved"] == 1 and db.stats()["pending"] == 1
 
 
+def test_overdue_batches_are_capped(db):
+    now = datetime(2026, 10, 31, 19, 10, tzinfo=MADRID)
+    db.set("week_plan", {"week": planner.week_key(now.date()), "target": 10, "days": {now.date().isoformat(): 10}})
+    db.set("day_plan", {"date": now.date().isoformat(), "quota": 10, "batches": [
+        {"hour": 17, "quota": 5, "done": False}, {"hour": 18, "quota": 1, "done": False},
+        {"hour": 19, "quota": 4, "done": False}]})
+    due, why = runner.check_due(db, CFG, now, random.Random(0))
+    assert due == CFG["schedule"]["max_per_batch"] and "recortada de 10" in why
+
+
 def test_pause(db):
     assert not runner.is_paused(db)
     runner.pause(db, 48, "test")

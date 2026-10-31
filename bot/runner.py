@@ -37,7 +37,10 @@ def check_due(db, cfg, now_local, rng):
         return 0, "fuera de la ventana horaria"
     _, day = planner.ensure_plans(db, cfg, now_local, rng)
     due = planner.due_quota(day, now_local)
-    return due, f"plan de hoy: {[(b['hour'], b['quota'], b['done']) for b in day['batches']]}"
+    # Si se acumulan tandas atrasadas (VM apagada, pausa), no se envían todas de golpe: lo que exceda se pierde.
+    capped = min(due, sch.get("max_per_batch", due))
+    note = f" (recortada de {due})" if capped < due else ""
+    return capped, f"plan de hoy: {[(b['hour'], b['quota'], b['done']) for b in day['batches']]}{note}"
 
 
 def maintenance(li, db, cfg, now_local):
