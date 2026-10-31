@@ -81,7 +81,7 @@ jobs:
         run: |
           git config user.name "linkedin-bot"
           git config user.email "linkedin-bot@users.noreply.github.com"
-          git add data/state.db
+          git add -f data/state.db
           git diff --cached --quiet || git commit -m "estado $(date -u +%FT%TZ) [skip ci]"
           git push
 
