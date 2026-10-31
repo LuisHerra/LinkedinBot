@@ -18,7 +18,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import planner, runner
-from .config import DEFAULT_DB, load_config
+from .config import DEFAULT_DB, load_config, load_dotenv
 from .db import DB
 
 
@@ -39,6 +39,7 @@ def main():
     ap.add_argument("--segment", help="Fuerza un segmento de config.yaml (pruebas)")
     args = ap.parse_args()
 
+    load_dotenv()
     cfg = load_config()
     # BOT_DB permite pruebas locales sin tocar el estado que usa GitHub Actions.
     db = DB(Path(os.environ["BOT_DB"]) if os.environ.get("BOT_DB") else DEFAULT_DB)
