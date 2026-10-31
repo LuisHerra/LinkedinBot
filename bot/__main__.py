@@ -12,6 +12,7 @@ import os
 import random
 import sys
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import planner, runner
@@ -33,10 +34,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="Todo menos pulsar el botón de enviar")
     ap.add_argument("--force", action="store_true", help="Ejecuta una tanda aunque no toque (respeta los topes)")
     ap.add_argument("--quota", type=int, default=5, help="Tamaño de la tanda con --force")
+    ap.add_argument("--segment", help="Fuerza un segmento de config.yaml (pruebas)")
     args = ap.parse_args()
 
     cfg = load_config()
-    db = DB(DEFAULT_DB)
+    # BOT_DB permite pruebas locales sin tocar el estado que usa GitHub Actions.
+    db = DB(Path(os.environ["BOT_DB"]) if os.environ.get("BOT_DB") else DEFAULT_DB)
     rng = random.SystemRandom()
     now_local = datetime.now(ZoneInfo(cfg["timezone"]))
     try:
@@ -65,12 +68,12 @@ def main():
         wanted = args.quota if args.force else due
         if wanted <= 0:
             return 0
-        return run(db, cfg, rng, now_local, wanted, args.dry_run)
+        return run(db, cfg, rng, now_local, wanted, args.dry_run, args.segment)
     finally:
         db.close()
 
 
-def run(db, cfg, rng, now_local, wanted, dry_run):
+def run(db, cfg, rng, now_local, wanted, dry_run, segment=None):
     from .browser import choose_proxy, open_page
     from .linkedin import Checkpoint, LinkedIn, NotLoggedIn
 
@@ -85,7 +88,7 @@ def run(db, cfg, rng, now_local, wanted, dry_run):
         with open_page(cfg, proxy_url) as page:
             li = LinkedIn(page, cfg, rng)
             try:
-                sent = runner.run_batch(li, db, cfg, rng, now_local, wanted, dry_run)
+                sent = runner.run_batch(li, db, cfg, rng, now_local, wanted, dry_run, segment)
             except (Checkpoint, NotLoggedIn):
                 raise
             except Exception:

@@ -58,6 +58,18 @@ def test_clean_url():
     assert clean_profile_url("https://www.linkedin.com/company/acme/") is None
 
 
+def test_search_card_2026_layout():
+    from bot.linkedin import parse_search_card
+    text = ("Zakaria L. \n • 2º\n\nAI IT & Voz Engineer en Intrum\n\nAlcalá de Henares, Comunidad de Madrid, España\n\n"
+            "Conectar\n\nAnterior: Estudiante en Universidad de Alcalá y 3 cursos\n\n"
+            "Sergio Caro Álvaro, Aaron Martinez y 8 contactos más en común")
+    c = parse_search_card("https://www.linkedin.com/in/zakaria-l-123/?mini=1", text)
+    assert c == {"profile_url": "https://www.linkedin.com/in/zakaria-l-123/", "name": "Zakaria L.",
+                 "headline": "AI IT & Voz Engineer en Intrum", "mutuals": 10}
+    one = parse_search_card("/in/oscar/", "Óscar \n • 2º\n\nIngeniero IA\n\nMaksudur Rahman Mredul es contacto en común")
+    assert one["mutuals"] == 1
+
+
 # --- scoring ---
 def test_scoring_prefers_mutuals_and_few_followers():
     small = {"mutuals": 20, "followers": 400, "headline": ""}

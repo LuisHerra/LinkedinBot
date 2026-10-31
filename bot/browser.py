@@ -78,6 +78,12 @@ def choose_proxy(cfg, iso_week):
     raise RuntimeError("Ningún proxy responde (PROXY_PRIMARY / PROXY_SECONDARY). No se ejecuta sin proxy.")
 
 
+CHROME_PATHS = [
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+]
+
 # Cookies de vida muy corta que el navegador regenera solo; reutilizarlas caducadas no aporta nada.
 VOLATILE_COOKIES = {"__cf_bm", "lidc"}
 
@@ -116,6 +122,28 @@ def session_cookies():
 @contextmanager
 def open_page(cfg, proxy_url):
     from playwright.sync_api import sync_playwright
+
+    profile_dir = os.environ.get("CHROME_PROFILE_DIR", "").strip()
+    if profile_dir:
+        # Modo local: tu Chrome real con el perfil donde ya iniciaste sesión (Chrome debe estar cerrado).
+        print(f"Sesión: perfil de Chrome {profile_dir}")
+        with sync_playwright() as pw:
+            exe = os.environ.get("CHROME_EXE") or next((p for p in CHROME_PATHS if os.path.exists(p)), None)
+            context = pw.chromium.launch_persistent_context(
+                profile_dir,
+                **({"executable_path": exe} if exe else {"channel": "chrome"}),
+                headless=False,
+                proxy=proxy_from_url(normalize_proxy(proxy_url)),
+                locale="es-ES",
+                timezone_id=cfg["timezone"],
+                viewport=VIEWPORT,
+            )
+            page = context.pages[0] if context.pages else context.new_page()
+            try:
+                yield page
+            finally:
+                context.close()
+        return
 
     cookies = session_cookies()
     user_agent = os.environ.get("LI_USER_AGENT", "").strip() or None

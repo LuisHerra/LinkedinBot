@@ -58,23 +58,30 @@ def maintenance(li, db, cfg, now_local):
     return len(pending), new_manual
 
 
-def pick_search(cfg, rng):
-    """Elige segmento por peso y una palabra clave dentro de él."""
+def pick_search(cfg, rng, only=None):
+    """Elige segmento por peso (o el indicado en `only`) y una palabra clave dentro de él."""
     segments = cfg["targeting"]["segments"]
+    if only:
+        segments = [s for s in segments if s["name"] == only] or segments
     seg = rng.choices(segments, weights=[s.get("weight", 1) for s in segments])[0]
     return seg["name"], rng.choice(seg["keywords"]), seg.get("geo_urns") or ()
 
 
-def collect_candidates(li, db, cfg, rng, needed):
+def collect_candidates(li, db, cfg, rng, needed, only_segment=None):
     t = cfg["targeting"]
     known = db.known_urls()
-    segment, keyword, geo = pick_search(cfg, rng)
+    segment, keyword, geo = pick_search(cfg, rng, only_segment)
     pages = rng.randint(*t["search_pages"])
-    raw = []
+    found, raw = 0, []
     for page_num in range(1, pages + 1):
-        raw += [c for c in li.search(keyword, page_num, geo) if c["profile_url"] not in known]
+        results = li.search(keyword, page_num, geo)
+        found += len(results)
+        raw += [c for c in results if c["profile_url"] not in known]
         li.pause()
+    print(f"  '{segment}/{keyword}': {pages} pág., {found} perfiles leídos, {len(raw)} nuevos, "
+          f"comunes={sorted((c['mutuals'] for c in raw), reverse=True)[:15]}")
     raw = [c for c in raw if c["mutuals"] >= t["min_mutuals"]]
+    print(f"  con >= {t['min_mutuals']} contactos en común: {len(raw)}")
     raw.sort(key=lambda c: c["mutuals"], reverse=True)
 
     to_inspect = raw[: math.ceil(needed * t["profiles_to_inspect_per_invite"])]
@@ -86,13 +93,14 @@ def collect_candidates(li, db, cfg, rng, needed):
             c["score"] = score(c, cfg)
             ranked.append(c)
         else:
+            print(f"  descartado {c['name']}: {reason} (seg={c.get('followers')}, creador={c.get('creator')})")
             db.record_skip(c["profile_url"], reason)
         li.pause()
     ranked.sort(key=lambda c: c["score"], reverse=True)
     return f"{segment}/{keyword}", ranked
 
 
-def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False):
+def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=None):
     from .linkedin import WeeklyLimitReached
 
     li.ensure_logged_in()
@@ -103,7 +111,7 @@ def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False):
     if allowed <= 0:
         return 0
 
-    search, ranked = collect_candidates(li, db, cfg, rng, allowed)
+    search, ranked = collect_candidates(li, db, cfg, rng, allowed, only_segment)
     print(f"Búsqueda '{search}': {len(ranked)} candidatos elegibles")
     sent = 0
     for c in ranked[:allowed]:

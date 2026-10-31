@@ -3,6 +3,7 @@
 Los selectores se basan en roles y aria-labels (español e inglés), que cambian menos que las clases CSS,
 pero LinkedIn rediseña a menudo: si algo deja de funcionar, la captura en data/screenshots dice dónde.
 """
+import os
 import re
 import time
 from urllib.parse import quote
@@ -19,6 +20,56 @@ WITHDRAW = re.compile(r"^(retirar|withdraw)$", re.I)
 PENDING = re.compile(r"(pendiente|pending)", re.I)
 WEEKLY_LIMIT = re.compile(r"(límite semanal|weekly invitation limit|weekly limit)", re.I)
 EMAIL_REQUIRED = re.compile(r"(dirección de correo|email address to connect|conoce .* correo)", re.I)
+
+
+# "Conectar" en la tarjeta del perfil es un enlace a /preload/custom-invite/ (diseño 2026) o un botón (diseño antiguo).
+CONNECT_CSS = ("a[href*='custom-invite']:visible, button[aria-label*='a conectar' i]:visible, "
+               "button[aria-label*='to connect' i]:visible")
+
+TOP_CARD_JS = r"""() => {
+    const sec = document.querySelector('main section');
+    if (!sec) return null;
+    const visible = el => {
+        const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
+    };
+    const label = el => (el.getAttribute('aria-label') || el.innerText || '').trim();
+    const ctrls = [...sec.querySelectorAll('a, button, [role="button"]')].filter(visible);
+    const any = re => ctrls.some(el => re.test(label(el)));
+    return {
+        connect: ctrls.some(el => /custom-invite/.test(el.getAttribute('href') || ''))
+                 || any(/(a conectar|to connect)$|^(conectar|connect)$/i),
+        follow: any(/^(seguir|follow)\b/i),
+        pending: any(/pendiente|pending/i),
+        more: any(/^(más|more)$/i),
+    };
+}"""
+
+DEGREE_LINE = re.compile(r"^[•·]?\s*\d+\s*(º|er|nd|rd|th)\b")
+MUTUAL_LINE = re.compile(r"mutual|en com[uú]n", re.I)
+UI_LINES = re.compile(r"^(conectar|connect|seguir|follow|mensaje|message|pendiente|pending)$", re.I)
+
+
+def parse_search_card(href, text):
+    """Tarjeta de resultado -> {profile_url, name, headline, mutuals} o None.
+
+    Texto típico: nombre / • 2º / titular / ubicación / Conectar / Resumen… / "X y 8 contactos más en común".
+    """
+    url = clean_profile_url(href)
+    if not url:
+        return None
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if not lines:
+        return None
+    meta = [l for l in lines[1:] if not DEGREE_LINE.match(l) and not UI_LINES.match(l)]
+    mutual_lines = [l for l in lines if MUTUAL_LINE.search(l)]
+    return {
+        "profile_url": url,
+        "name": lines[0],
+        "headline": meta[0] if meta else None,
+        # Solo la línea de contactos en común: el resumen puede contener números o "y".
+        "mutuals": parse_mutuals(mutual_lines[-1]) if mutual_lines else 0,
+    }
 
 
 class NotLoggedIn(Exception):
@@ -90,6 +141,10 @@ class LinkedIn:
 
     def check_session(self):
         url = self.page.url
+        # "¡Hola de nuevo!" vive bajo /checkpoint/lg pero es un login normal, no una verificación.
+        if "/checkpoint/lg" in url or self.page.locator("input[type='password']").count():
+            self.screenshot("not-logged-in")
+            raise NotLoggedIn(url)
         if "/checkpoint" in url or "/challenge" in url or self.page.locator("iframe[src*='captcha']").count():
             self.screenshot("checkpoint")
             raise Checkpoint(url)
@@ -173,73 +228,84 @@ class LinkedIn:
             url += f"&page={page_num}"
         self.goto(url)
         self.scroll_a_bit(self.rng.randint(3, 6))
+        if os.environ.get("DEBUG_SHOTS"):
+            self.screenshot(f"search-p{page_num}")
+        # Cada resultado es un [role=listitem] (antes <li>). El primer enlace /in/ es la persona;
+        # los siguientes son tus contactos en común, que no deben tratarse como candidatos.
         cards = self.page.evaluate("""() => {
             const out = [];
-            for (const a of document.querySelectorAll('main a[href*="/in/"]')) {
-                const card = a.closest('li') || a.closest('[data-chameleon-result-urn]') || a.closest('[data-view-name]');
-                if (!card) continue;
+            let items = [...document.querySelectorAll('[role="listitem"]')];
+            if (!items.length) items = [...document.querySelectorAll('main li')];
+            for (const card of items) {
+                const a = card.querySelector('a[href*="/in/"]');
+                if (!a) continue;
                 out.push({href: a.getAttribute('href'), text: card.innerText});
             }
             return out;
         }""")
-        found = {}
-        for c in cards:
-            url = clean_profile_url(c["href"])
-            if not url or url in found:
-                continue
-            lines = [l.strip() for l in c["text"].split("\n") if l.strip()]
-            # Las líneas de la tarjeta suelen ser: nombre, "• 2º", titular, ubicación, contactos en común...
-            meta = [l for l in lines[1:] if not re.match(r"^[•·]?\s*\d+(º|er|nd|rd|th)", l) and "Conectar" not in l]
-            found[url] = {
-                "profile_url": url,
-                "name": lines[0] if lines else None,
-                "headline": meta[0] if meta else None,
-                "mutuals": parse_mutuals(c["text"]),
-            }
-        return list(found.values())
+        return [c for c in (parse_search_card(x["href"], x["text"]) for x in cards) if c]
 
     # --- perfil ---
     def top_card(self):
         return self.page.locator("main section").first
 
+    def top_card_state(self):
+        """Controles *visibles* de la tarjeta superior del perfil.
+
+        El menú "Más" tiene elementos ocultos (p. ej. "Seguir a X") que no deben contar como botón principal.
+        """
+        return self.page.evaluate(TOP_CARD_JS) or {"connect": False, "follow": False, "pending": False, "more": False}
+
     def inspect_profile(self, profile_url):
         self.goto(profile_url)
+        if os.environ.get("DEBUG_SHOTS"):
+            self.screenshot("profile")
         self.scroll_a_bit(self.rng.randint(1, 3))
         text = self.page.locator("main").inner_text(timeout=15_000)
-        card = self.top_card()
-        connect_visible = card.get_by_role("button", name=CONNECT_LABEL).count() > 0
-        follow_primary = card.get_by_role("button", name=FOLLOW_LABEL).count() > 0 and not connect_visible
-        pending = card.get_by_role("button", name=PENDING).count() > 0
+        state = self.top_card_state()
         return {
             "followers": parse_followers(text),
             # Texto del perfil (extracto, experiencia, educación) para detectar afinidad. No se guarda en la base de datos.
             "profile_text": text[:6000],
-            "creator": follow_primary,
+            # Modo creador: el botón principal visible es "Seguir" y "Conectar" queda escondido en "Más".
+            "creator": state["follow"] and not state["connect"],
             # Si no se ve "Conectar", puede estar en el menú "Más"; solo se descarta si ya hay invitación pendiente.
-            "can_connect": not pending,
+            "can_connect": not state["pending"],
         }
+
+    def connect_control(self):
+        """Botón/enlace "Conectar" visible de la tarjeta superior (o, si no, el del menú "Más")."""
+        card = self.top_card()
+        direct = card.locator(CONNECT_CSS).first
+        if direct.count():
+            return direct
+        more = card.locator("button:visible").filter(has_text=re.compile(r"^\s*(Más|More)\s*$")).first
+        if not more.count():
+            return None
+        more.click()
+        self.page.wait_for_timeout(self.rng.randint(600, 1400))
+        in_menu = self.page.locator(
+            "a[href*='custom-invite']:visible, [role='menu'] [aria-label*='conectar' i]:visible, "
+            "[role='menu'] [aria-label*='connect' i]:visible, [role='menuitem']:visible:has-text('Conectar')"
+        ).first
+        if in_menu.count():
+            return in_menu
+        self.page.keyboard.press("Escape")
+        return None
 
     def send_invite(self, profile_url, dry_run=False):
         """Envía la invitación sin nota. Devuelve (ok, motivo)."""
         if self.page.url.rstrip("/") != profile_url.rstrip("/"):
             self.goto(profile_url)
         card = self.top_card()
-        button = card.get_by_role("button", name=CONNECT_LABEL)
-        if not button.count():
-            more = card.get_by_role("button", name=MORE_LABEL)
-            if not more.count():
-                return False, "sin botón conectar ni menú más"
-            more.first.click()
-            self.page.wait_for_timeout(self.rng.randint(600, 1400))
-            button = self.page.locator("[role='menu'], .artdeco-dropdown__content").get_by_role("button", name=CONNECT_LABEL)
-            if not button.count():
-                button = self.page.get_by_role("menuitem", name=CONNECT_LABEL)
-            if not button.count():
-                self.page.keyboard.press("Escape")
-                return False, "conectar no disponible en el menú"
+        button = self.connect_control()
+        if button is None:
+            return False, "conectar no disponible"
         if dry_run:
-            return True, "dry-run"
-        button.first.click()
+            # No se pulsa: en algunos perfiles "Conectar" envía directamente sin diálogo.
+            self.page.keyboard.press("Escape")
+            return True, f"dry-run (encontrado: {button.get_attribute('aria-label') or button.inner_text()})"
+        button.click()
         self.page.wait_for_timeout(self.rng.randint(1200, 2500))
 
         body = self.page.locator("body").inner_text()
@@ -263,7 +329,7 @@ class LinkedIn:
         if WEEKLY_LIMIT.search(body):
             self.screenshot("weekly-limit")
             raise WeeklyLimitReached()
-        if card.get_by_role("button", name=PENDING).count():
+        if self.top_card_state()["pending"]:
             return True, "enviada"
         self.screenshot("unconfirmed")
         return True, "enviada (sin confirmar estado pendiente)"
