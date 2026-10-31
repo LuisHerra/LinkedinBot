@@ -19,11 +19,20 @@ def proxy_from_url(url):
 
 
 def normalize_proxy(raw):
-    """Limpia el valor del secreto: espacios, comillas, saltos de línea y esquema ausente."""
+    """Limpia el valor del secreto: espacios, comillas, saltos de línea y esquema ausente.
+
+    Acepta también el formato de muchos proveedores 'ip:puerto:usuario:contraseña'.
+    """
     url = (raw or "").strip().strip("\"'").strip()
-    if url and "://" not in url:
-        url = "http://" + url
-    return url
+    if not url:
+        return url
+    scheme, _, rest = url.rpartition("://")
+    scheme = scheme or "http"
+    parts = rest.split(":")
+    if "@" not in rest and len(parts) == 4:
+        host, port, user, password = parts
+        rest = f"{user}:{password}@{host}:{port}"
+    return f"{scheme}://{rest}"
 
 
 def describe(url):
