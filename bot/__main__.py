@@ -32,6 +32,9 @@ def github_output(**kv):
 
 
 def main():
+    # La consola de Windows usa cp1252 y no puede imprimir ✔/✘; en la VM ya es UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(prog="bot")
     ap.add_argument("command", choices=["due", "run", "plan", "stats", "unpause", "login", "serve"])
     ap.add_argument("--dry-run", action="store_true", help="Todo menos pulsar el botón de enviar")

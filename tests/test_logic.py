@@ -94,7 +94,7 @@ def test_affinity_and_seniority():
 def test_pick_search_uses_segments():
     rng = random.Random(0)
     names = {runner.pick_search(CFG, rng)[0]["name"] for _ in range(300)}
-    assert names == {s["name"] for s in CFG["targeting"]["segments"]}
+    assert names == {s["name"] for s in CFG["targeting"]["segments"] if s.get("weight", 1) > 0}
     for seg in CFG["targeting"]["segments"]:
         assert seg["keywords"]
 

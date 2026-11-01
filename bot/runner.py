@@ -145,13 +145,14 @@ def run_batch(li, db, cfg, rng, now_local, wanted, dry_run=False, only_segment=N
         except WeeklyLimitReached:
             pause(db, 72, "LinkedIn avisó del límite semanal")
             break
-        print(f"  {'✔' if ok else '✘'} {c['name']} | comunes={c['mutuals']} seg={c.get('followers')} "
-              f"score={c['score']} | {reason}")
+        # Se guarda antes de imprimir: si la salida falla, el envío ya queda contado en el tope.
         if ok and not dry_run:
             db.record_invite(c)
             sent += 1
         elif not ok:
             db.record_skip(c["profile_url"], reason)
+        print(f"  {'✔' if ok else '✘'} {c['name']} | comunes={c['mutuals']} seg={c.get('followers')} "
+              f"score={c['score']} | {reason}")
         li.pause("delay_between_invites_s")
     db.log("batch", f"busqueda={search} enviadas={sent} dry_run={dry_run}")
     return sent

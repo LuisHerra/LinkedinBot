@@ -32,7 +32,7 @@ targeting:
   # Para una ciudad concreta, filtra a mano en LinkedIn y copia el número de geoUrn de la URL.
   segments:
     - name: cayotv
-      weight: 3               # Compañeros y entorno de tu empresa actual
+      weight: 0               # Desactivado: tus compañeros ya son contactos de 1er grado y la búsqueda de 2º grado sale vacía
       min_mutuals: 1          # La empresa compartida ya da afinidad; no hace falta red común grande
       keywords: ["CayoTV", "Cayo TV"]
       geo_urns: []
