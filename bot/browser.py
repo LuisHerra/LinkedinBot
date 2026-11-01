@@ -59,8 +59,21 @@ def proxy_alive(url, timeout=15):
         return None, f"{type(e).__name__}: {str(e)[:150]}"
 
 
+def direct_ip(timeout=15):
+    try:
+        with urllib.request.urlopen("https://api.ipify.org", timeout=timeout) as r:
+            return r.read().decode().strip()
+    except Exception:
+        return "desconocida"
+
+
 def choose_proxy(cfg, iso_week):
-    """Devuelve (nombre, url, ip_salida). En modo sticky se usa siempre el principal; el secundario es solo de reserva."""
+    """Devuelve (nombre, url, ip_salida). En modo sticky se usa siempre el principal; el secundario es solo de reserva.
+
+    USE_PROXY=0 (p. ej. en tu PC) navega con tu propia conexión: url es None.
+    """
+    if os.environ.get("USE_PROXY", "1") == "0":
+        return "directo (sin proxy)", None, direct_ip()
     order = [("primary", os.environ.get("PROXY_PRIMARY")), ("secondary", os.environ.get("PROXY_SECONDARY"))]
     if cfg["proxy"]["mode"] == "weekly" and int(iso_week.split("W")[1]) % 2 == 1:
         order.reverse()
@@ -144,7 +157,7 @@ def open_page(cfg, proxy_url):
                 **({"executable_path": exe} if exe else {}),
                 headless=False,
                 args=args,
-                proxy=proxy_from_url(normalize_proxy(proxy_url)),
+                proxy=proxy_from_url(normalize_proxy(proxy_url)) if proxy_url else None,
                 locale="es-ES",
                 timezone_id=cfg["timezone"],
                 viewport=VIEWPORT,
@@ -162,7 +175,7 @@ def open_page(cfg, proxy_url):
     with sync_playwright() as pw:
         # headless=False: en GitHub Actions se ejecuta dentro de xvfb-run, con navegador "con ventana".
         browser = pw.chromium.launch(headless=os.environ.get("HEADLESS") == "1",
-                                     proxy=proxy_from_url(normalize_proxy(proxy_url)))
+                                     proxy=proxy_from_url(normalize_proxy(proxy_url)) if proxy_url else None)
         context = browser.new_context(
             locale="es-ES",
             timezone_id=cfg["timezone"],
