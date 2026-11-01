@@ -343,6 +343,10 @@ class LinkedIn:
             except PWError as e:
                 raise ProfileUnavailable(f"{profile_url}: {str(e).splitlines()[0][:120]}") from None
         self.profile_text(profile_url)  # asegura que la tarjeta ha cargado antes de buscar "Conectar"
+        # Tras el scroll de la inspección, la cabecera fija aparece y se anima, y el botón de la tarjeta
+        # nunca llega a estar "estable" para Playwright. Se vuelve arriba y se deja asentar la página.
+        self.page.evaluate("window.scrollTo(0, 0)")
+        self.page.wait_for_timeout(self.rng.randint(1500, 3000))
         card = self.top_card()
         button = self.connect_control()
         if button is None:
@@ -355,7 +359,15 @@ class LinkedIn:
 
         # "Conectar" es un enlace a /preload/custom-invite/: Playwright esperaría a que esa navegación termine,
         # y en una máquina lenta con proxy eso supera el timeout aunque el diálogo ya esté abriéndose.
-        button.click(no_wait_after=True, timeout=60_000)
+        href = button.get_attribute("href") or ""
+        try:
+            button.click(no_wait_after=True, timeout=20_000)
+        except PWTimeout:
+            if "custom-invite" not in href:
+                raise ProfileUnavailable(f"{profile_url}: el botón Conectar no responde") from None
+            # Mismo destino que el clic: abrir el enlace de invitación directamente.
+            print("  (el clic no entra; abriendo el enlace de invitación)")
+            self.goto(BASE + href if href.startswith("/") else href)
         try:
             self.page.wait_for_selector("[role='dialog']:visible, [role='alertdialog']:visible", timeout=45_000)
         except PWTimeout:
