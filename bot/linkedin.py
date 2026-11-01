@@ -322,7 +322,12 @@ class LinkedIn:
         more = card.locator("button:visible").filter(has_text=re.compile(r"^\s*(Más|More)\s*$")).first
         if not more.count():
             return None
-        more.click()
+        from playwright.sync_api import TimeoutError as PWTimeout
+
+        try:
+            more.click(no_wait_after=True, timeout=15_000)
+        except PWTimeout:
+            return None
         self.page.wait_for_timeout(self.rng.randint(600, 1400))
         in_menu = self.page.locator(
             "a[href*='custom-invite']:visible, [role='menu'] [aria-label*='conectar' i]:visible, "
@@ -347,6 +352,9 @@ class LinkedIn:
         # nunca llega a estar "estable" para Playwright. Se vuelve arriba y se deja asentar la página.
         self.page.evaluate("window.scrollTo(0, 0)")
         self.page.wait_for_timeout(self.rng.randint(1500, 3000))
+        if self.top_card_state()["pending"]:
+            # Ya invitada (a mano o por otra ejecución): no se reenvía ni se cuenta como envío nuevo.
+            return False, "ya tenía invitación pendiente"
         card = self.top_card()
         button = self.connect_control()
         if button is None:
