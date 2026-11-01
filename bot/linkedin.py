@@ -387,7 +387,19 @@ class LinkedIn:
             self.screenshot("weekly-limit")
             raise WeeklyLimitReached()
         dialog = self.page.locator("[role='dialog']:visible, [role='alertdialog']:visible")
-        if dialog.count():
+        if not dialog.count() and "custom-invite" in self.page.url:
+            # Abierto como página completa (no como ventana emergente): el botón está en la propia página.
+            page_send = self.page.get_by_role("button", name=SEND_NO_NOTE).first
+            try:
+                page_send.wait_for(state="visible", timeout=45_000)
+            except PWTimeout:
+                self.screenshot("invite-page-unknown")
+                return False, "página de invitación sin botón de enviar"
+            if EMAIL_REQUIRED.search(self.page.locator("body").inner_text()):
+                return False, "pide email"
+            page_send.click(no_wait_after=True, timeout=60_000)
+            self.page.wait_for_timeout(self.rng.randint(2500, 4000))
+        elif dialog.count():
             if EMAIL_REQUIRED.search(dialog.first.inner_text()):
                 self.page.keyboard.press("Escape")
                 return False, "pide email"
