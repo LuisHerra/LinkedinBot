@@ -24,12 +24,17 @@ def score(c, cfg):
     s = w["w_mutuals"] * math.log1p(c.get("mutuals") or 0)
     # Sin dato de seguidores se asume un perfil medio (500) en vez de premiarlo.
     s -= w["w_followers"] * math.log10(max(c.get("followers") or 500, 1))
-    # El espacio final permite términos como "ia " sin que coincidan dentro de otras palabras al final del titular.
-    headline = (c.get("headline") or "") + " "
+    # Los espacios permiten términos como "ia " o " cto " sin que coincidan dentro de otras palabras.
+    headline = f" {c.get('headline') or ''} ".replace(",", " ").replace("|", " ")
     if contains_any(headline, t.get("headline_boost_terms")):
         s += w["w_headline"]
-    if contains_any(headline, t.get("senior_terms")):
+    job = contains_any(headline, t.get("job_terms"))
+    if job:
+        s += w.get("w_job", 0)
+    elif contains_any(headline, t.get("senior_terms")):
         s -= w.get("w_senior", 0)
     if contains_any(c.get("profile_text"), t.get("affinity_terms")):
         s += w.get("w_affinity", 0)
+    if (c.get("mutuals") or 0) >= t.get("known_min_mutuals", 10**9):
+        s += w.get("w_known", 0)
     return round(s, 3)

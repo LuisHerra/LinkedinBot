@@ -40,29 +40,48 @@ targeting:
       weight: 2               # Bootcamp "Ellas Hablan Código" de Telefónica (profesor) y educación tecnológica
       min_mutuals: 2
       keywords: ["Ellas Hablan Código", "Telefónica bootcamp", "Telefónica Tech", "profesora programación",
-                 "mujeres en tecnología", "bootcamp programación"]
+                 "mujeres en tecnología", "bootcamp programación", "Fundación Telefónica", "Campus 42",
+                 "formador programación", "Ironhack", "The Bridge bootcamp", "Women in Tech España"]
       geo_urns: ["105646813"]
     - name: alumni
       weight: 3               # Compañeros de universidad: los que más aceptan
       min_mutuals: 1
-      keywords: ["Universidad de Alcalá informática", "Université Paris-Saclay", "MIAGE", "Erasmus Paris-Saclay"]
+      keywords: ["Universidad de Alcalá informática", "Universidad de Alcalá ingeniería", "UAH ingeniería informática",
+                 "Escuela Politécnica Superior Alcalá", "Universidad de Alcalá estudiante", "Université Paris-Saclay",
+                 "MIAGE", "Erasmus Paris-Saclay", "Paris-Saclay informatique", "Université d'Évry MIAGE"]
       geo_urns: []
     - name: aws_cloud
       weight: 2
-      keywords: ["AWS", "cloud engineer", "solutions architect", "AWS mentor"]
+      min_mutuals: 2
+      keywords: ["AWS", "cloud engineer", "solutions architect", "AWS mentor", "AWS community builder",
+                 "DevOps engineer", "AWS certified", "AWS Educate", "plataforma cloud", "SRE"]
       geo_urns: ["105646813"]
     - name: ia_datos
       weight: 2
-      keywords: ["data scientist", "machine learning engineer", "inteligencia artificial", "data engineer"]
+      min_mutuals: 2
+      keywords: ["data scientist", "machine learning engineer", "inteligencia artificial", "data engineer",
+                 "AI engineer", "MLOps", "data analyst", "LLM", "IA generativa", "científico de datos"]
       geo_urns: ["105646813", "105015875"]
     - name: desarrollo_web
       weight: 2
-      keywords: ["desarrollador web", "full stack developer", "frontend developer", "node.js"]
+      min_mutuals: 2
+      keywords: ["desarrollador web", "full stack developer", "frontend developer", "node.js", "react developer",
+                 "backend developer", "desarrollador software", "software engineer", "programador junior",
+                 "streaming video developer"]
       geo_urns: ["105646813"]
     - name: recruiters_tech
-      weight: 1               # Aceptan casi siempre y son útiles para prácticas o primer empleo
-      keywords: ["IT recruiter", "tech recruiter", "talent acquisition tecnología"]
+      weight: 4               # Aceptan casi siempre y son la vía más directa a ofertas de empleo
+      min_mutuals: 1
+      keywords: ["IT recruiter", "tech recruiter", "talent acquisition tecnología", "technical recruiter",
+                 "recruiter software", "headhunter IT", "talent acquisition specialist", "reclutadora IT",
+                 "selección IT", "people partner tech", "recruiter startup", "consultora selección tecnológica"]
       geo_urns: ["105646813", "105015875"]
+    - name: hiring_tech
+      weight: 2               # Quien contrata o decide en equipos técnicos: tech leads, engineering managers, startups
+      min_mutuals: 2
+      keywords: ["engineering manager", "tech lead", "team lead software", "CTO startup", "hiring developers",
+                 "estamos contratando desarrolladores", "we are hiring software", "responsable de desarrollo"]
+      geo_urns: ["105646813"]
   search_pages: [1, 3]        # Páginas de resultados a recorrer por tanda
   profiles_to_inspect_per_invite: 2   # Perfiles visitados por invitación (para leer seguidores); menos = tandas más cortas
   min_mutuals: 3              # Por defecto; cada segmento puede bajarlo con su propio min_mutuals
@@ -78,13 +97,22 @@ targeting:
                    "amazon web services"]
   # Penalización: perfiles muy senior aceptan poco a estudiantes y perfiles junior.
   senior_terms: ["director", "vp ", "vice president", "head of", "chief", "ceo", "partner", "managing"]
+  # Bonus: perfiles que pueden abrirte puertas a un empleo (recruiters, quien contrata, ofertas abiertas).
+  # Si el titular coincide, no se aplica la penalización senior (un "Head of Talent" interesa).
+  job_terms: ["recruiter", "reclutador", "reclutadora", "talent", "headhunter", "selección", "seleccion",
+              "hiring", "contratando", "we're hiring", "people partner", "rrhh", "human resources",
+              "recursos humanos", "engineering manager", "tech lead", " cto "]
+  # Gente conocida: con muchos contactos en común es probable que os conozcáis o compartáis círculo.
+  known_min_mutuals: 8
 
 scoring:
   w_mutuals: 3.0              # Peso de log(1 + contactos en común)
   w_followers: 1.5            # Penalización por log10(seguidores)
   w_headline: 1.0             # Bonus si el titular contiene algún término de headline_boost_terms
-  w_affinity: 2.0             # Bonus si el perfil contiene algún término de affinity_terms
+  w_affinity: 2.5             # Bonus si el perfil contiene algún término de affinity_terms
   w_senior: 1.5               # Penalización si el titular contiene algún término de senior_terms
+  w_job: 2.0                  # Bonus si el titular contiene algún término de job_terms
+  w_known: 1.5                # Bonus por gente conocida (>= known_min_mutuals contactos en común)
 
 maintenance:
   withdraw_after_days: 21     # Retira invitaciones pendientes más antiguas que esto

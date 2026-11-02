@@ -91,6 +91,18 @@ def test_affinity_and_seniority():
     assert score(colleague, CFG) > score(base, CFG)
 
 
+def test_job_and_known_bonus():
+    base = {"mutuals": 4, "followers": 800, "headline": "Desarrollador de proyectos"}
+    recruiter = {**base, "headline": "Head of Talent Acquisition | IT Recruiter"}
+    cto = {**base, "headline": "CTO, startup de streaming"}
+    director = {**base, "headline": "Director comercial"}
+    assert score(recruiter, CFG) > score(base, CFG)
+    assert score(cto, CFG) > score(base, CFG) > score(director, CFG)
+    known = {**base, "mutuals": CFG["targeting"]["known_min_mutuals"]}
+    almost = {**base, "mutuals": CFG["targeting"]["known_min_mutuals"] - 1}
+    assert score(known, CFG) - score(almost, CFG) > CFG["scoring"]["w_known"]
+
+
 def test_pick_search_uses_segments():
     rng = random.Random(0)
     names = {runner.pick_search(CFG, rng)[0]["name"] for _ in range(300)}
