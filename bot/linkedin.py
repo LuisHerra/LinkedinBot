@@ -18,6 +18,7 @@ MORE_LABEL = re.compile(r"(más acciones|more actions|^más$|^more$)", re.I)
 SEND_NO_NOTE = re.compile(r"(enviar sin nota|send without a note|^enviar$|^send$)", re.I)
 WITHDRAW = re.compile(r"^(retirar|withdraw)$", re.I)
 PENDING = re.compile(r"(pendiente|pending)", re.I)
+SENT_TOAST = re.compile(r"(se ha enviado (la|tu) invitación|invitation sent|your invitation .* was sent)", re.I)
 WEEKLY_LIMIT = re.compile(r"(límite semanal|weekly invitation limit|weekly limit)", re.I)
 EMAIL_REQUIRED = re.compile(r"(dirección de correo|email address to connect|conoce .* correo)", re.I)
 
@@ -423,8 +424,11 @@ class LinkedIn:
         if "custom-invite" in self.page.url:
             self.goto(profile_url)
             self.profile_text(profile_url)
-        if self.top_card_state()["pending"]:
-            return True, "enviada"
+        # El botón "Pendiente" y el aviso "Se ha enviado la invitación" pueden tardar unos segundos en aparecer.
+        for _ in range(8):
+            if self.top_card_state()["pending"] or SENT_TOAST.search(self.page.locator("body").inner_text()):
+                return True, "enviada"
+            self.page.wait_for_timeout(1500)
         # Sin diálogo y sin "Pendiente": no se puede afirmar que se envió. No se registra como enviada;
         # si en realidad salió, la próxima sincronización de pendientes la detectará y la contará.
         self.screenshot("unconfirmed")
